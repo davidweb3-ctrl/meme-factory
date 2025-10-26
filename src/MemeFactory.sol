@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "./IMemeToken.sol";
 import "./MemeToken.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/proxy/Clones.sol";
 
 /**
  * @title MemeFactory
@@ -12,9 +14,6 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
  * @notice This contract deploys a single MemeToken implementation and creates proxies for each new token
  */
 contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
-    // EIP-1167 minimal proxy bytecode
-    bytes private constant PROXY_BYTECODE = hex"3d602d80600a3d3981f3363d3d373d3d3d363d7300000000000000000000000000000000000000005af43d82803e903d91602b57fd5bf3";
-    
     address public immutable implementation;
     uint256 public tokenCount;
     uint256 public creationFee = 0.01 ether; // Default creation fee
@@ -50,6 +49,23 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
         uint256 perMint,
         uint256 price
     );
+    event MemeDeployed(
+        address indexed tokenAddress,
+        string name,
+        string symbol,
+        address indexed issuer,
+        uint256 totalSupplyLimit,
+        uint256 perMint,
+        uint256 price
+    );
+    event MemeMinted(
+        address indexed tokenAddress,
+        address indexed minter,
+        uint256 amount,
+        uint256 totalCost,
+        uint256 projectFee,
+        uint256 issuerFee
+    );
     event CreationFeeUpdated(uint256 newFee);
     event DefaultParametersUpdated(uint256 totalSupplyLimit, uint256 perMint, uint256 price);
     event FactoryPaused();
@@ -65,7 +81,95 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @dev Create a new Meme Token using minimal proxy
+     * @dev Deploy a new Meme Token using OpenZeppelin Clones
+     * @param name The name of the token
+     * @param symbol The symbol of the token
+     * @param totalSupplyLimit_ Maximum total supply (0 to use default)
+     * @param perMint_ Amount per mint (0 to use default)
+     * @param price_ Price per token (0 to use default)
+     * @return tokenAddress The address of the deployed token proxy
+     */
+    function deployMeme(
+        string memory name,
+        string memory symbol,
+        uint256 totalSupplyLimit_,
+        uint256 perMint_,
+        uint256 price_
+    ) external payable whenNotPaused nonReentrant returns (address tokenAddress) {
+        require(msg.value >= creationFee, "Insufficient creation fee");
+        require(bytes(name).length > 0, "Name cannot be empty");
+        require(bytes(symbol).length > 0, "Symbol cannot be empty");
+        require(!symbolExists[symbol], "Symbol already exists");
+        require(bytes(name).length <= 50, "Name too long");
+        require(bytes(symbol).length <= 10, "Symbol too long");
+
+        // Use default values if 0 is provided
+        uint256 finalTotalSupplyLimit = totalSupplyLimit_ == 0 ? defaultTotalSupplyLimit : totalSupplyLimit_;
+        uint256 finalPerMint = perMint_ == 0 ? defaultPerMint : perMint_;
+        uint256 finalPrice = price_ == 0 ? defaultPrice : price_;
+
+        // Deploy clone using OpenZeppelin Clones
+        tokenAddress = Clones.clone(implementation);
+        require(tokenAddress != address(0), "Failed to deploy clone");
+        
+        // Initialize the clone
+        MemeToken(tokenAddress).initialize(
+            name,
+            symbol,
+            msg.sender,
+            address(this),
+            finalTotalSupplyLimit,
+            finalPerMint,
+            finalPrice
+        );
+
+        // Record token information
+        tokenCount++;
+        tokens[tokenCount] = TokenInfo({
+            tokenAddress: tokenAddress,
+            name: name,
+            symbol: symbol,
+            creator: msg.sender,
+            createdAt: block.timestamp,
+            totalSupplyLimit: finalTotalSupplyLimit,
+            perMint: finalPerMint,
+            price: finalPrice,
+            exists: true
+        });
+        
+        isTokenCreated[tokenAddress] = true;
+        symbolExists[symbol] = true;
+
+        // Emit both events for backward compatibility
+        emit TokenCreated(
+            tokenCount, 
+            tokenAddress, 
+            name, 
+            symbol, 
+            msg.sender,
+            finalTotalSupplyLimit,
+            finalPerMint,
+            finalPrice
+        );
+        
+        emit MemeDeployed(
+            tokenAddress,
+            name,
+            symbol,
+            msg.sender,
+            finalTotalSupplyLimit,
+            finalPerMint,
+            finalPrice
+        );
+
+        // Refund excess payment
+        if (msg.value > creationFee) {
+            payable(msg.sender).transfer(msg.value - creationFee);
+        }
+    }
+
+    /**
+     * @dev Create a new Meme Token using minimal proxy (legacy function for backward compatibility)
      * @param name The name of the token
      * @param symbol The symbol of the token
      * @param totalSupplyLimit_ Maximum total supply (0 to use default)
@@ -92,33 +196,20 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
         uint256 finalPerMint = perMint_ == 0 ? defaultPerMint : perMint_;
         uint256 finalPrice = price_ == 0 ? defaultPrice : price_;
 
-        // Create minimal proxy
-        bytes memory bytecode = abi.encodePacked(
-            PROXY_BYTECODE,
-            abi.encode(implementation)
+        // Deploy clone using OpenZeppelin Clones
+        tokenAddress = Clones.clone(implementation);
+        require(tokenAddress != address(0), "Failed to deploy clone");
+        
+        // Initialize the clone
+        MemeToken(tokenAddress).initialize(
+            name,
+            symbol,
+            msg.sender,
+            address(this),
+            finalTotalSupplyLimit,
+            finalPerMint,
+            finalPrice
         );
-        
-        bytes32 salt = keccak256(abi.encodePacked(name, symbol, msg.sender, block.timestamp));
-        assembly {
-            tokenAddress := create2(0, add(bytecode, 0x20), mload(bytecode), salt)
-        }
-        
-        require(tokenAddress != address(0), "Failed to create proxy");
-        
-        // Initialize the proxy with token parameters
-        (bool success, ) = tokenAddress.call(
-            abi.encodeWithSignature(
-                "initialize(string,string,address,address,uint256,uint256,uint256)",
-                name,
-                symbol,
-                msg.sender,
-                address(this),
-                finalTotalSupplyLimit,
-                finalPerMint,
-                finalPrice
-            )
-        );
-        require(success, "Failed to initialize token");
 
         // Record token information
         tokenCount++;
@@ -137,11 +228,22 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
         isTokenCreated[tokenAddress] = true;
         symbolExists[symbol] = true;
 
+        // Emit both events for backward compatibility
         emit TokenCreated(
             tokenCount, 
             tokenAddress, 
             name, 
             symbol, 
+            msg.sender,
+            finalTotalSupplyLimit,
+            finalPerMint,
+            finalPrice
+        );
+        
+        emit MemeDeployed(
+            tokenAddress,
+            name,
+            symbol,
             msg.sender,
             finalTotalSupplyLimit,
             finalPerMint,
@@ -176,33 +278,20 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
         uint256 finalPerMint = defaultPerMint;
         uint256 finalPrice = defaultPrice;
 
-        // Create minimal proxy
-        bytes memory bytecode = abi.encodePacked(
-            PROXY_BYTECODE,
-            abi.encode(implementation)
+        // Deploy clone using OpenZeppelin Clones
+        tokenAddress = Clones.clone(implementation);
+        require(tokenAddress != address(0), "Failed to deploy clone");
+        
+        // Initialize the clone
+        MemeToken(tokenAddress).initialize(
+            name,
+            symbol,
+            msg.sender,
+            address(this),
+            finalTotalSupplyLimit,
+            finalPerMint,
+            finalPrice
         );
-        
-        bytes32 salt = keccak256(abi.encodePacked(name, symbol, msg.sender, block.timestamp));
-        assembly {
-            tokenAddress := create2(0, add(bytecode, 0x20), mload(bytecode), salt)
-        }
-        
-        require(tokenAddress != address(0), "Failed to create proxy");
-        
-        // Initialize the proxy with token parameters
-        (bool success, ) = tokenAddress.call(
-            abi.encodeWithSignature(
-                "initialize(string,string,address,address,uint256,uint256,uint256)",
-                name,
-                symbol,
-                msg.sender,
-                address(this),
-                finalTotalSupplyLimit,
-                finalPerMint,
-                finalPrice
-            )
-        );
-        require(success, "Failed to initialize token");
 
         // Record token information
         tokenCount++;
@@ -221,11 +310,22 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
         isTokenCreated[tokenAddress] = true;
         symbolExists[symbol] = true;
 
+        // Emit both events for backward compatibility
         emit TokenCreated(
             tokenCount, 
             tokenAddress, 
             name, 
             symbol, 
+            msg.sender,
+            finalTotalSupplyLimit,
+            finalPerMint,
+            finalPrice
+        );
+        
+        emit MemeDeployed(
+            tokenAddress,
+            name,
+            symbol,
             msg.sender,
             finalTotalSupplyLimit,
             finalPerMint,
@@ -247,19 +347,59 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
     function mintToken(address tokenAddress, address to, uint256 amount) external onlyOwner {
         require(isTokenCreated[tokenAddress], "Token not created by this factory");
         
+        IMemeToken token = IMemeToken(tokenAddress);
+        
         if (amount == 0) {
             // Use default perMint amount
-            (bool success, ) = tokenAddress.call(
-                abi.encodeWithSignature("mintByFactory(address)", to)
-            );
-            require(success, "Failed to mint tokens");
+            token.mintByFactory(to);
         } else {
             // Use specified amount
-            (bool success, ) = tokenAddress.call(
-                abi.encodeWithSignature("mintByFactory(address,uint256)", to, amount)
-            );
-            require(success, "Failed to mint tokens");
+            token.mintByFactory(to, amount);
         }
+    }
+
+    /**
+     * @dev Mint Meme tokens by paying ETH
+     * @param tokenAddress The token contract address
+     * @param amount The amount to mint (0 to use default perMint)
+     */
+    function mintMeme(address tokenAddress, uint256 amount) external payable whenNotPaused nonReentrant {
+        require(isTokenCreated[tokenAddress], "Token not created by this factory");
+        
+        IMemeToken token = IMemeToken(tokenAddress);
+        
+        // Determine mint amount
+        uint256 mintAmount = amount == 0 ? token.perMint() : amount;
+        require(mintAmount > 0, "Mint amount must be greater than 0");
+        
+        // Calculate required payment
+        uint256 requiredPayment = mintAmount * token.price();
+        require(msg.value == requiredPayment, "Incorrect payment amount");
+        
+        // Calculate fee distribution (1% project, 99% issuer)
+        uint256 projectFee = requiredPayment / 100; // 1%
+        uint256 issuerFee = requiredPayment - projectFee; // 99%
+        
+        // Distribute fees
+        if (projectFee > 0) {
+            payable(owner()).transfer(projectFee);
+        }
+        if (issuerFee > 0) {
+            payable(token.issuer()).transfer(issuerFee);
+        }
+        
+        // Mint tokens to the caller
+        token.mintByFactory(msg.sender, mintAmount);
+        
+        // Emit event
+        emit MemeMinted(
+            tokenAddress,
+            msg.sender,
+            mintAmount,
+            requiredPayment,
+            projectFee,
+            issuerFee
+        );
     }
 
     /**
@@ -381,5 +521,66 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
         uint256 price_
     ) {
         return (defaultTotalSupplyLimit, defaultPerMint, defaultPrice);
+    }
+
+    /**
+     * @dev Get token information using interface
+     * @param tokenAddress The token contract address
+     * @return name_ Token name
+     * @return symbol_ Token symbol
+     * @return totalSupply_ Current total supply
+     * @return totalSupplyLimit_ Maximum total supply
+     * @return perMint_ Amount per mint
+     * @return price_ Price per token
+     * @return issuer_ Token issuer
+     * @return minted_ Total minted amount
+     */
+    function getTokenInfoByAddress(address tokenAddress) external view returns (
+        string memory name_,
+        string memory symbol_,
+        uint256 totalSupply_,
+        uint256 totalSupplyLimit_,
+        uint256 perMint_,
+        uint256 price_,
+        address issuer_,
+        uint256 minted_
+    ) {
+        require(isTokenCreated[tokenAddress], "Token not created by this factory");
+        IMemeToken token = IMemeToken(tokenAddress);
+        return token.getTokenInfo();
+    }
+
+    /**
+     * @dev Check if a token can mint more tokens
+     * @param tokenAddress The token contract address
+     * @return True if the token can mint more tokens
+     */
+    function canTokenMint(address tokenAddress) external view returns (bool) {
+        require(isTokenCreated[tokenAddress], "Token not created by this factory");
+        IMemeToken token = IMemeToken(tokenAddress);
+        return token.canMint();
+    }
+
+    /**
+     * @dev Get remaining mintable amount for a token
+     * @param tokenAddress The token contract address
+     * @return The remaining mintable amount
+     */
+    function getTokenRemainingMintable(address tokenAddress) external view returns (uint256) {
+        require(isTokenCreated[tokenAddress], "Token not created by this factory");
+        IMemeToken token = IMemeToken(tokenAddress);
+        return token.getRemainingMintable();
+    }
+
+    /**
+     * @dev Get token balance for a specific address
+     * @param tokenAddress The token contract address
+     * @param account The account address
+     * @return The token balance
+     */
+    function getTokenBalance(address tokenAddress, address account) external view returns (uint256) {
+        require(isTokenCreated[tokenAddress], "Token not created by this factory");
+        IMemeToken token = IMemeToken(tokenAddress);
+        return token.balanceOf(account);
     }
 }

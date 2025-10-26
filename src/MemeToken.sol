@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "./IMemeToken.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
@@ -11,7 +12,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
  * @dev ERC20 Token implementation for Meme Factory using upgradeable pattern
  * @notice This contract serves as the implementation for all meme tokens created by the factory
  */
-contract MemeToken is Initializable, ERC20Upgradeable, OwnableUpgradeable, ReentrancyGuardUpgradeable {
+contract MemeToken is Initializable, ERC20Upgradeable, OwnableUpgradeable, ReentrancyGuardUpgradeable, IMemeToken {
     // Token configuration
     uint256 public totalSupplyLimit;  // Maximum total supply
     uint256 public perMint;           // Amount to mint per mintByFactory call
@@ -25,14 +26,6 @@ contract MemeToken is Initializable, ERC20Upgradeable, OwnableUpgradeable, Reent
     
     // Factory address - only factory can call mintByFactory
     address public factory;
-    
-    // Events
-    event TokensBurned(address indexed from, uint256 amount);
-    event BurnRateUpdated(uint256 newBurnRate);
-    event BurnToggled(bool enabled);
-    event TokensMinted(address indexed to, uint256 amount);
-    event PriceUpdated(uint256 newPrice);
-    event PerMintUpdated(uint256 newPerMint);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -117,7 +110,7 @@ contract MemeToken is Initializable, ERC20Upgradeable, OwnableUpgradeable, Reent
      * @param amount The amount to transfer
      * @return bool Success status
      */
-    function transfer(address to, uint256 amount) public override returns (bool) {
+    function transfer(address to, uint256 amount) public override(ERC20Upgradeable, IMemeToken) returns (bool) {
         uint256 burnAmount = 0;
         
         if (burnEnabled && burnRate > 0) {
@@ -139,7 +132,7 @@ contract MemeToken is Initializable, ERC20Upgradeable, OwnableUpgradeable, Reent
      * @param amount The amount to transfer
      * @return bool Success status
      */
-    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) public override(ERC20Upgradeable, IMemeToken) returns (bool) {
         uint256 burnAmount = 0;
         
         if (burnEnabled && burnRate > 0) {
@@ -154,6 +147,79 @@ contract MemeToken is Initializable, ERC20Upgradeable, OwnableUpgradeable, Reent
         return super.transferFrom(from, to, transferAmount);
     }
 
+    // ============ Override Functions ============
+    
+    /**
+     * @dev Override name function
+     * @return The token name
+     */
+    function name() public view override(ERC20Upgradeable, IMemeToken) returns (string memory) {
+        return super.name();
+    }
+    
+    /**
+     * @dev Override symbol function
+     * @return The token symbol
+     */
+    function symbol() public view override(ERC20Upgradeable, IMemeToken) returns (string memory) {
+        return super.symbol();
+    }
+    
+    /**
+     * @dev Override decimals function
+     * @return The token decimals
+     */
+    function decimals() public view override(ERC20Upgradeable, IMemeToken) returns (uint8) {
+        return super.decimals();
+    }
+    
+    /**
+     * @dev Override totalSupply function
+     * @return The total supply
+     */
+    function totalSupply() public view override(ERC20Upgradeable, IMemeToken) returns (uint256) {
+        return super.totalSupply();
+    }
+    
+    /**
+     * @dev Override balanceOf function
+     * @param account The account address
+     * @return The balance
+     */
+    function balanceOf(address account) public view override(ERC20Upgradeable, IMemeToken) returns (uint256) {
+        return super.balanceOf(account);
+    }
+    
+    /**
+     * @dev Override approve function
+     * @param spender The spender address
+     * @param amount The amount to approve
+     * @return Success status
+     */
+    function approve(address spender, uint256 amount) public override(ERC20Upgradeable, IMemeToken) returns (bool) {
+        return super.approve(spender, amount);
+    }
+    
+    /**
+     * @dev Override allowance function
+     * @param owner The owner address
+     * @param spender The spender address
+     * @return The allowance
+     */
+    function allowance(address owner, address spender) public view override(ERC20Upgradeable, IMemeToken) returns (uint256) {
+        return super.allowance(owner, spender);
+    }
+    
+    /**
+     * @dev Override owner function
+     * @return The owner address
+     */
+    function owner() public view override(OwnableUpgradeable, IMemeToken) returns (address) {
+        return super.owner();
+    }
+
+    // ============ Owner Functions ============
+    
     /**
      * @dev Set the burn rate (only owner)
      * @param newBurnRate The new burn rate in basis points (100 = 1%)

@@ -1,0 +1,13 @@
+No files changed, compilation skipped
+
+Ran 7 tests for test/CoreFunctionalityTest.t.sol:CoreFunctionalityTest
+[PASS] test_CompleteWorkflow() (gas: 822669)
+[PASS] test_CustomMintAmount() (gas: 737216)
+[PASS] test_DefaultParameters() (gas: 638896)
+[PASS] test_FeeDistributionCorrectness() (gas: 745422)
+[PASS] test_MemeDeployment() (gas: 661330)
+[PASS] test_OverflowMintRevert() (gas: 782131)
+[PASS] test_SingleMintSuccess() (gas: 746832)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 1.32ms (1.46ms CPU time)
+
+Ran 1 test suite in 166.27ms (1.32ms CPU time): 7 tests passed, 0 failed, 0 skipped (7 total tests)

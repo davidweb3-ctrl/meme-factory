@@ -1,0 +1,43 @@
+No files changed, compilation skipped
+
+Ran 1 test for test/SimpleMintTest.t.sol:SimpleMintTest
+[PASS] test_SimpleMint() (gas: 729831)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 601.83µs (124.71µs CPU time)
+
+Ran 4 tests for test/InterfaceIntegration.t.sol:InterfaceIntegrationTest
+[PASS] test_FactoryCanImportInterface() (gas: 234)
+[PASS] test_FactoryUsesInterface() (gas: 211)
+[PASS] test_InterfaceCompilation() (gas: 257)
+[PASS] test_InterfaceFunctionsExist() (gas: 256)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 832.50µs (124.33µs CPU time)
+
+Ran 7 tests for test/CoreFunctionalityTest.t.sol:CoreFunctionalityTest
+[PASS] test_CompleteWorkflow() (gas: 822669)
+[PASS] test_CustomMintAmount() (gas: 737216)
+[PASS] test_DefaultParameters() (gas: 638896)
+[PASS] test_FeeDistributionCorrectness() (gas: 745422)
+[PASS] test_MemeDeployment() (gas: 661330)
+[PASS] test_OverflowMintRevert() (gas: 782131)
+[PASS] test_SingleMintSuccess() (gas: 746832)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 961.63µs (1.24ms CPU time)
+
+Ran 16 tests for test/DeployMeme.t.sol:DeployMemeTest
+[PASS] test_DeployMemeAfterUnpause() (gas: 640466)
+[PASS] test_DeployMemeEmptyName() (gas: 30093)
+[PASS] test_DeployMemeEmptySymbol() (gas: 30043)
+[PASS] test_DeployMemeEventEmitted() (gas: 624153)
+[PASS] test_DeployMemeInsufficientFee() (gas: 30088)
+[PASS] test_DeployMemeIsTokenCreatedMapping() (gas: 633695)
+[PASS] test_DeployMemeNameTooLong() (gas: 32751)
+[PASS] test_DeployMemePaused() (gas: 50763)
+[PASS] test_DeployMemeRefundExcessPayment() (gas: 636871)
+[PASS] test_DeployMemeSuccess() (gas: 636501)
+[PASS] test_DeployMemeSymbolAlreadyExists() (gas: 643033)
+[PASS] test_DeployMemeSymbolExistsMapping() (gas: 632784)
+[PASS] test_DeployMemeSymbolTooLong() (gas: 32477)
+[PASS] test_DeployMemeTokenCountIncremented() (gas: 1214429)
+[PASS] test_DeployMemeTokenInfoRecorded() (gas: 631123)
+[PASS] test_DeployMemeWithDefaultParameters() (gas: 632055)
+Suite result: ok. 16 passed; 0 failed; 0 skipped; finished in 974.29µs (1.32ms CPU time)
+
+Ran 4 test suites in 164.47ms (3.37ms CPU time): 28 tests passed, 0 failed, 0 skipped (28 total tests)
