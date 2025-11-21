@@ -18,9 +18,12 @@ contract LocalDeploymentTest is Script {
         
         // Step 1: Deploy MemeFactory
         console.log("\n=== Step 1: Deploy MemeFactory ===");
-        MemeFactory factory = new MemeFactory(deployer);
+        // Get Uniswap V2 Router address from environment or use a default
+        address routerAddress = vm.envOr("UNISWAP_V2_ROUTER", address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D));
+        MemeFactory factory = new MemeFactory(deployer, routerAddress);
         console.log("Factory deployed at:", address(factory));
         console.log("Factory owner:", factory.owner());
+        console.log("Uniswap V2 Router:", address(factory.uniswapV2Router()));
         
         // Step 2: Deploy a Meme Token
         console.log("\n=== Step 2: Deploy Meme Token ===");
@@ -117,13 +120,15 @@ contract LocalDeploymentTest is Script {
         // Step 6: Verify Fee Distribution
         console.log("\n=== Step 6: Verify Fee Distribution ===");
         
-        uint256 projectFee = requiredPayment / 100; // 1%
-        uint256 issuerFee = requiredPayment - projectFee; // 99%
+        uint256 projectFee = requiredPayment * 5 / 100; // 5%
+        uint256 liquidityETH = requiredPayment * 5 / 100; // 5%
+        uint256 issuerFee = requiredPayment - projectFee - liquidityETH; // 90%
         
         console.log("Fee distribution:");
         console.log("  Total payment:", requiredPayment);
-        console.log("  Expected project fee (1%):", projectFee);
-        console.log("  Expected issuer fee (99%):", issuerFee);
+        console.log("  Expected project fee (5%):", projectFee);
+        console.log("  Expected liquidity ETH (5%):", liquidityETH);
+        console.log("  Expected issuer fee (90%):", issuerFee);
         
         console.log("\n=== Deployment Test Completed Successfully! ===");
     }

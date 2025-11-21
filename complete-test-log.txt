@@ -1,0 +1,185 @@
+No files changed, compilation skipped
+
+Ran 1 test for test/SimpleMintTest.t.sol:SimpleMintTest
+[PASS] test_SimpleMint() (gas: 1461429)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 891.67µs (196.13µs CPU time)
+
+Ran 4 tests for test/InterfaceIntegration.t.sol:InterfaceIntegrationTest
+[PASS] test_FactoryCanImportInterface() (gas: 421)
+[PASS] test_FactoryUsesInterface() (gas: 509)
+[PASS] test_InterfaceCompilation() (gas: 201)
+[PASS] test_InterfaceFunctionsExist() (gas: 443)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 1.45ms (47.38µs CPU time)
+
+Ran 16 tests for test/DeployMeme.t.sol:DeployMemeTest
+[PASS] test_DeployMemeAfterUnpause() (gas: 638778)
+[PASS] test_DeployMemeEmptyName() (gas: 29635)
+[PASS] test_DeployMemeEmptySymbol() (gas: 29313)
+[PASS] test_DeployMemeEventEmitted() (gas: 623066)
+[PASS] test_DeployMemeInsufficientFee() (gas: 29315)
+[PASS] test_DeployMemeIsTokenCreatedMapping() (gas: 632779)
+[PASS] test_DeployMemeNameTooLong() (gas: 32124)
+[PASS] test_DeployMemePaused() (gas: 50805)
+[PASS] test_DeployMemeRefundExcessPayment() (gas: 635058)
+[PASS] test_DeployMemeSuccess() (gas: 636471)
+[PASS] test_DeployMemeSymbolAlreadyExists() (gas: 641270)
+[PASS] test_DeployMemeSymbolExistsMapping() (gas: 632245)
+[PASS] test_DeployMemeSymbolTooLong() (gas: 32059)
+[PASS] test_DeployMemeTokenCountIncremented() (gas: 1212615)
+[PASS] test_DeployMemeTokenInfoRecorded() (gas: 630015)
+[PASS] test_DeployMemeWithDefaultParameters() (gas: 631283)
+Suite result: ok. 16 passed; 0 failed; 0 skipped; finished in 1.46ms (851.09µs CPU time)
+
+Ran 5 tests for test/LiquidityAndBuyTest.t.sol:LiquidityAndBuyTest
+[PASS] test_BuyMemeFromUniswap() (gas: 1542229)
+Logs:
+  === Test: Buy Meme from Uniswap ===
+  Liquidity pair: 0xffD4505B3452Dc22f8473616d50503bA9E1710Ac
+  Buy amount (ETH): 100000000000000000
+  Expected tokens from Uniswap: 0
+  Tokens at mint price: 100000000000000000000000000000000000
+  Uniswap price not better, skipping buy test
+  Buy from Uniswap test completed!
+
+[PASS] test_BuyMemeRevertsIfPriceNotBetter() (gas: 1544774)
+Logs:
+  === Test: BuyMeme Reverts if Price Not Better ===
+  BuyMeme revert test passed!
+
+[PASS] test_FeeDistribution5Percent() (gas: 1538048)
+Logs:
+  === Test: 5% Fee Distribution ===
+  Initial deployer balance: 0
+  Initial issuer balance: 99990000000000000000
+  Initial buyer balance: 10000000000000000000000
+  Payment amount: 1000000000000000000000
+  Expected project fee (5%): 50000000000000000000
+  Expected liquidity ETH (5%): 50000000000000000000
+  Expected issuer fee (90%): 900000000000000000000
+  Final deployer balance: 50000000000000000000
+  Final issuer balance: 999990000000000000000
+  Final buyer balance: 9000000000000000000000
+  Actual project fee received: 50000000000000000000
+  Actual issuer fee received: 900000000000000000000
+  Liquidity pair address: 0xffD4505B3452Dc22f8473616d50503bA9E1710Ac
+  5% fee distribution test passed!
+
+[PASS] test_LiquidityAddedOnFirstMint() (gas: 1538643)
+Logs:
+  === Test: Liquidity Added on First Mint ===
+  Pair before mint: 0x0000000000000000000000000000000000000000
+  Pair after mint: 0xffD4505B3452Dc22f8473616d50503bA9E1710Ac
+  Reserve 0: 50000000000000000000
+  Reserve 1: 50
+  Expected liquidity ETH: 50000000000000000000
+  Expected liquidity token: 50000000000000000000
+  User token balance: 950000000000000000000
+  Expected user tokens (95%): 950000000000000000000
+  Liquidity added test passed!
+
+[PASS] test_MultipleMintsAccumulateLiquidity() (gas: 1624362)
+Logs:
+  === Test: Multiple Mints Accumulate Liquidity ===
+  After first mint - Reserve 0: 50000000000000000000
+  After first mint - Reserve 1: 50
+  After second mint - Reserve 0: 50000000000000000000
+  After second mint - Reserve 1: 50000000000000000000
+  Multiple mints liquidity test passed!
+
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 1.54ms (1.17ms CPU time)
+
+Ran 7 tests for test/CoreFunctionalityTest.t.sol:CoreFunctionalityTest
+[PASS] test_CompleteWorkflow() (gas: 1657119)
+Logs:
+  === Complete Workflow Integration Test ===
+  Step 1 - Token deployed: 0xDd16898e8Dd96b0A96B4BCd6126f7ACb9DBf2C82
+  Step 2 - Mint 1 completed. Total minted: 1000
+  Step 2 - Mint 2 completed. Total minted: 2000
+  Step 2 - Mint 3 completed. Total minted: 3000
+  Step 3 - Final verification completed
+  Total tokens minted: 3000
+  Total supply: 3000
+  Buyer token balance: 2850
+  Complete workflow integration test passed!
+
+[PASS] test_CustomMintAmount() (gas: 1444947)
+Logs:
+  === Test: Custom Mint Amount ===
+  Custom mint amount: 500
+  Custom payment: 500
+  Final minted: 500
+  Custom mint amount test passed!
+
+[PASS] test_DefaultParameters() (gas: 638178)
+Logs:
+  === Test: Default Parameters ===
+  Default totalSupplyLimit: 1000000000000000000000000000
+  Default perMint: 100000000000000000000000000
+  Default price: 1000000000000000
+  Default parameters test passed!
+
+[PASS] test_FeeDistributionCorrectness() (gas: 1453221)
+Logs:
+  === Test 3: Fee Distribution Correctness ===
+  Initial deployer balance: 0
+  Initial issuer balance: 9990000000000000000
+  Initial buyer balance: 10000000000000000000
+  Total payment: 1000
+  Expected project fee (5%): 50
+  Expected liquidity ETH (5%): 50
+  Expected issuer fee (90%): 900
+  Final deployer balance: 50
+  Final issuer balance: 9990000000000000900
+  Final buyer balance: 9999999999999999000
+  Actual project fee received: 50
+  Actual issuer fee received: 900
+  Total distributed: 950
+  Fee distribution correctness test passed!
+
+[PASS] test_MemeDeployment() (gas: 663542)
+Logs:
+  === Test 1: Meme Deployment ===
+  Initial token count: 0
+  Initial issuer balance: 10000000000000000000
+  Token deployed at: 0xDd16898e8Dd96b0A96B4BCd6126f7ACb9DBf2C82
+  Token name: Test Meme Token
+  Token symbol: TMT
+  Total supply limit: 1000000000000000000000000
+  Per mint: 1000
+  Token price: 1
+  Final issuer balance: 9990000000000000000
+  Meme deployment test passed!
+
+[PASS] test_OverflowMintRevert() (gas: 1493158)
+Logs:
+  === Test 4: Overflow Mint Revert ===
+  Token supply limit: 1000
+  Per mint amount: 1000
+  After first mint:
+  Minted: 1000
+  Total supply: 1000
+  Buyer balance: 950
+  After failed second mint:
+  Minted: 1000
+  Total supply: 1000
+  Buyer balance: 950
+  Overflow mint revert test passed!
+
+[PASS] test_SingleMintSuccess() (gas: 1455004)
+Logs:
+  === Test 2: Single Mint Success ===
+  Initial buyer ETH balance: 10000000000000000000
+  Initial token balance: 0
+  Initial minted: 0
+  Initial total supply: 0
+  Required payment: 1000
+  Final buyer ETH balance: 9999999999999999000
+  Final token balance: 950
+  Final minted: 1000
+  Final total supply: 1000
+  Payment made: 1000
+  Single mint success test passed!
+
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 1.57ms (1.62ms CPU time)
+
+Ran 5 test suites in 168.01ms (6.91ms CPU time): 33 tests passed, 0 failed, 0 skipped (33 total tests)

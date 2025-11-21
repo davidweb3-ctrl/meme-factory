@@ -5,15 +5,19 @@ import {Test, console} from "forge-std/Test.sol";
 import {MemeFactory} from "../src/MemeFactory.sol";
 import {MemeToken} from "../src/MemeToken.sol";
 import {IMemeToken} from "../src/IMemeToken.sol";
+import "./UniswapV2Test.sol";
 
 contract CoreFunctionalityTest is Test {
     MemeFactory public factory;
+    MockUniswapV2Router public router;
+    MockUniswapV2Factory public uniswapFactory;
+    MockWETH public weth;
     
     // Different roles for testing
     address public deployer;  // Factory deployer/owner
     address public issuer;    // Token issuer/creator
     address public buyer;     // Token buyer/minter
-    address public project;   // Project team (receives 1% fee)
+    address public project;   // Project team (receives 5% fee)
     
     // Test parameters
     string public constant TOKEN_NAME = "Test Meme Token";
@@ -30,9 +34,14 @@ contract CoreFunctionalityTest is Test {
         buyer = address(0x789);
         project = address(0xABC);
         
-        // Deploy factory as deployer
+        // Deploy mock Uniswap contracts
+        weth = new MockWETH();
+        uniswapFactory = new MockUniswapV2Factory();
+        router = new MockUniswapV2Router(address(uniswapFactory), address(weth));
+        
+        // Deploy factory as deployer with router address
         vm.startPrank(deployer);
-        factory = new MemeFactory(deployer);
+        factory = new MemeFactory(deployer, address(router));
         vm.stopPrank();
         
         // Give initial ETH to roles
@@ -145,7 +154,9 @@ contract CoreFunctionalityTest is Test {
         uint256 finalMinted = token.minted();
         uint256 finalTotalSupply = token.totalSupply();
         
-        assertEq(finalTokenBalance, initialTokenBalance + PER_MINT, "Token balance should increase");
+        // User receives 95% of tokens (5% goes to liquidity)
+        uint256 userTokenAmount = PER_MINT * 95 / 100;
+        assertEq(finalTokenBalance, initialTokenBalance + userTokenAmount, "Token balance should increase");
         assertEq(finalMinted, initialMinted + PER_MINT, "Minted amount should increase");
         assertEq(finalTotalSupply, initialTotalSupply + PER_MINT, "Total supply should increase");
         assertEq(finalBuyerBalance, initialBuyerBalance - requiredPayment, "ETH balance should decrease");
@@ -186,12 +197,14 @@ contract CoreFunctionalityTest is Test {
         
         // Calculate payment and expected fee distribution
         uint256 payment = PER_MINT * TOKEN_PRICE;
-        uint256 expectedProjectFee = payment / 100; // 1%
-        uint256 expectedIssuerFee = payment - expectedProjectFee; // 99%
+        uint256 expectedProjectFee = payment * 5 / 100; // 5%
+        uint256 expectedLiquidityETH = payment * 5 / 100; // 5%
+        uint256 expectedIssuerFee = payment - expectedProjectFee - expectedLiquidityETH; // 90%
         
         console.log("Total payment:", payment);
-        console.log("Expected project fee (1%):", expectedProjectFee);
-        console.log("Expected issuer fee (99%):", expectedIssuerFee);
+        console.log("Expected project fee (5%):", expectedProjectFee);
+        console.log("Expected liquidity ETH (5%):", expectedLiquidityETH);
+        console.log("Expected issuer fee (90%):", expectedIssuerFee);
         
         // Mint tokens
         vm.startPrank(buyer);
@@ -204,16 +217,17 @@ contract CoreFunctionalityTest is Test {
         uint256 finalBuyerBalance = buyer.balance;
         
         assertEq(finalDeployerBalance, initialDeployerBalance + expectedProjectFee, 
-                "Project should receive 1% fee");
+                "Project should receive 5% fee");
         assertEq(finalIssuerBalance, initialIssuerBalance + expectedIssuerFee, 
-                "Issuer should receive 99% fee");
+                "Issuer should receive 90% fee");
         assertEq(finalBuyerBalance, initialBuyerBalance - payment, 
                 "Buyer should pay the full amount");
         
-        // Verify total distribution equals payment
+        // Verify total distribution equals payment (5% project, 5% liquidity, 90% issuer)
         uint256 totalDistributed = (finalDeployerBalance - initialDeployerBalance) + 
                                   (finalIssuerBalance - initialIssuerBalance);
-        assertEq(totalDistributed, payment, "Total distribution should equal payment");
+        // Note: 5% goes to liquidity, so total distributed is 95% of payment
+        assertEq(totalDistributed, payment * 95 / 100, "Total distribution should equal 95% of payment");
         
         console.log("Final deployer balance:", finalDeployerBalance);
         console.log("Final issuer balance:", finalIssuerBalance);
@@ -254,9 +268,10 @@ contract CoreFunctionalityTest is Test {
         vm.stopPrank();
         
         // Verify first mint succeeded
+        uint256 userTokenAmount = PER_MINT * 95 / 100; // 95% to user, 5% to liquidity
         assertEq(token.minted(), PER_MINT, "First mint should succeed");
         assertEq(token.totalSupply(), PER_MINT, "Total supply should equal perMint");
-        assertEq(token.balanceOf(buyer), PER_MINT, "Buyer should have tokens");
+        assertEq(token.balanceOf(buyer), userTokenAmount, "Buyer should have 95% of tokens");
         
         console.log("After first mint:");
         console.log("Minted:", token.minted());
@@ -272,7 +287,7 @@ contract CoreFunctionalityTest is Test {
         // Verify state unchanged after failed mint
         assertEq(token.minted(), PER_MINT, "Minted should not change after failed mint");
         assertEq(token.totalSupply(), PER_MINT, "Total supply should not change after failed mint");
-        assertEq(token.balanceOf(buyer), PER_MINT, "Buyer balance should not change after failed mint");
+        assertEq(token.balanceOf(buyer), userTokenAmount, "Buyer balance should not change after failed mint");
         
         console.log("After failed second mint:");
         console.log("Minted:", token.minted());
@@ -311,17 +326,19 @@ contract CoreFunctionalityTest is Test {
             vm.stopPrank();
             
             totalMinted += PER_MINT;
+            uint256 userTokenAmount = totalMinted * 95 / 100; // 95% to user, 5% to liquidity
             assertEq(token.minted(), totalMinted, "Minted amount should accumulate");
             assertEq(token.totalSupply(), totalMinted, "Total supply should match minted");
-            assertEq(token.balanceOf(buyer), totalMinted, "Buyer balance should accumulate");
+            assertEq(token.balanceOf(buyer), userTokenAmount, "Buyer balance should accumulate");
             
             console.log("Step 2 - Mint", i + 1, "completed. Total minted:", totalMinted);
         }
         
         // Step 3: Verify final state
+        uint256 finalUserTokenAmount = (3 * PER_MINT) * 95 / 100; // 95% to user, 5% to liquidity
         assertEq(token.minted(), 3 * PER_MINT, "Final minted should be 3x perMint");
         assertEq(token.totalSupply(), 3 * PER_MINT, "Final total supply should be 3x perMint");
-        assertEq(token.balanceOf(buyer), 3 * PER_MINT, "Final buyer balance should be 3x perMint");
+        assertEq(token.balanceOf(buyer), finalUserTokenAmount, "Final buyer balance should be 95% of 3x perMint");
         
         console.log("Step 3 - Final verification completed");
         console.log("Total tokens minted:", token.minted());
@@ -386,9 +403,10 @@ contract CoreFunctionalityTest is Test {
         factory.mintMeme{value: customPayment}(tokenAddress, customAmount);
         vm.stopPrank();
         
+        uint256 userTokenAmount = customAmount * 95 / 100; // 95% to user, 5% to liquidity
         assertEq(token.minted(), customAmount, "Minted should equal custom amount");
         assertEq(token.totalSupply(), customAmount, "Total supply should equal custom amount");
-        assertEq(token.balanceOf(buyer), customAmount, "Buyer balance should equal custom amount");
+        assertEq(token.balanceOf(buyer), userTokenAmount, "Buyer balance should equal 95% of custom amount");
         
         console.log("Custom mint amount:", customAmount);
         console.log("Custom payment:", customPayment);

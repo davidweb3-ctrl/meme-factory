@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "./IMemeToken.sol";
 import "./MemeToken.sol";
+import "./IUniswapV2Router.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
@@ -17,6 +18,12 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
     address public immutable implementation;
     uint256 public tokenCount;
     uint256 public creationFee = 0.01 ether; // Default creation fee
+    IUniswapV2Router public uniswapV2Router;
+    IUniswapV2Factory public uniswapV2Factory;
+    address public WETH;
+    
+    // Track liquidity pools for tokens
+    mapping(address => address) public tokenPair; // token => pair address
     
     // Default token parameters
     uint256 public defaultTotalSupplyLimit = 1_000_000_000 * 10**18; // 1 billion tokens
@@ -66,6 +73,19 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
         uint256 projectFee,
         uint256 issuerFee
     );
+    event LiquidityAdded(
+        address indexed tokenAddress,
+        address indexed pair,
+        uint256 ethAmount,
+        uint256 tokenAmount,
+        uint256 liquidity
+    );
+    event MemeBought(
+        address indexed tokenAddress,
+        address indexed buyer,
+        uint256 ethAmount,
+        uint256 tokenAmount
+    );
     event CreationFeeUpdated(uint256 newFee);
     event DefaultParametersUpdated(uint256 totalSupplyLimit, uint256 perMint, uint256 price);
     event FactoryPaused();
@@ -74,10 +94,17 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
     /**
      * @dev Constructor that deploys the MemeToken implementation
      * @param initialOwner The initial owner of the factory
+     * @param routerAddress The Uniswap V2 Router address
      */
-    constructor(address initialOwner) Ownable(initialOwner) {
+    constructor(address initialOwner, address routerAddress) Ownable(initialOwner) {
         // Deploy the implementation contract
         implementation = address(new MemeToken());
+        
+        // Set Uniswap V2 Router
+        require(routerAddress != address(0), "Router address cannot be zero");
+        uniswapV2Router = IUniswapV2Router(routerAddress);
+        WETH = uniswapV2Router.WETH();
+        uniswapV2Factory = IUniswapV2Factory(uniswapV2Router.factory());
     }
 
     /**
@@ -376,9 +403,13 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
         uint256 requiredPayment = mintAmount * token.price();
         require(msg.value == requiredPayment, "Incorrect payment amount");
         
-        // Calculate fee distribution (1% project, 99% issuer)
-        uint256 projectFee = requiredPayment / 100; // 1%
-        uint256 issuerFee = requiredPayment - projectFee; // 99%
+        // Calculate fee distribution (5% project, 5% liquidity, 90% issuer)
+        uint256 projectFee = requiredPayment * 5 / 100; // 5%
+        uint256 liquidityETH = requiredPayment * 5 / 100; // 5% ETH for liquidity
+        uint256 issuerFee = requiredPayment - projectFee - liquidityETH; // 90%
+        
+        // Calculate liquidity token amount (5% of mintAmount)
+        uint256 liquidityTokenAmount = mintAmount * 5 / 100; // 5% tokens for liquidity
         
         // Distribute fees
         if (projectFee > 0) {
@@ -388,18 +419,135 @@ contract MemeFactory is Ownable, ReentrancyGuard, Pausable {
             payable(token.issuer()).transfer(issuerFee);
         }
         
-        // Mint tokens to the caller
-        token.mintByFactory(msg.sender, mintAmount);
+        // Mint tokens to the caller (95% of mintAmount)
+        uint256 userTokenAmount = mintAmount - liquidityTokenAmount;
+        token.mintByFactory(msg.sender, userTokenAmount);
+        
+        // Add liquidity to Uniswap if we have liquidity amounts
+        if (liquidityETH > 0 && liquidityTokenAmount > 0) {
+            _addLiquidity(tokenAddress, liquidityTokenAmount, liquidityETH);
+        }
         
         // Emit event
         emit MemeMinted(
             tokenAddress,
             msg.sender,
-            mintAmount,
+            userTokenAmount,
             requiredPayment,
             projectFee,
             issuerFee
         );
+    }
+    
+    /**
+     * @dev Internal function to add liquidity to Uniswap
+     * @param tokenAddress The token contract address
+     * @param tokenAmount The amount of tokens to add
+     * @param ethAmount The amount of ETH to add
+     */
+    function _addLiquidity(address tokenAddress, uint256 tokenAmount, uint256 ethAmount) internal {
+        IMemeToken token = IMemeToken(tokenAddress);
+        
+        // Check if pair exists, if not, create it
+        address pair = uniswapV2Factory.getPair(tokenAddress, WETH);
+        bool isFirstLiquidity = (pair == address(0));
+        
+        // If first liquidity, use mint price to determine ratio
+        uint256 finalTokenAmount = tokenAmount;
+        uint256 finalETHAmount = ethAmount;
+        
+        if (isFirstLiquidity) {
+            uint256 mintPrice = token.price();
+            // Calculate expected token amount based on mint price
+            // If mint price is 0.001 ETH per token, then 1 ETH = 1000 tokens
+            // So for ethAmount ETH, we need ethAmount * (1 / mintPrice) tokens
+            if (mintPrice > 0) {
+                uint256 expectedTokenAmount = (ethAmount * 10**18) / mintPrice;
+                if (expectedTokenAmount < tokenAmount) {
+                    // Adjust tokenAmount to match price
+                    finalTokenAmount = expectedTokenAmount;
+                } else if (expectedTokenAmount > tokenAmount) {
+                    // Adjust ethAmount to match price
+                    finalETHAmount = (tokenAmount * mintPrice) / 10**18;
+                }
+            }
+        }
+        
+        // Mint tokens for liquidity to this contract
+        token.mintByFactory(address(this), finalTokenAmount);
+        
+        // Approve router to spend tokens
+        token.approve(address(uniswapV2Router), finalTokenAmount);
+        
+        // Calculate minimum amounts (allow 1% slippage)
+        uint256 amountTokenMin = finalTokenAmount * 99 / 100;
+        uint256 amountETHMin = finalETHAmount * 99 / 100;
+        
+        // Add liquidity
+        (uint256 amountToken, uint256 amountETH, uint256 liquidity) = uniswapV2Router.addLiquidityETH{value: finalETHAmount}(
+            tokenAddress,
+            finalTokenAmount,
+            amountTokenMin,
+            amountETHMin,
+            address(this), // LP tokens go to factory
+            block.timestamp + 300 // 5 minutes deadline
+        );
+        
+        // Update pair address mapping
+        pair = uniswapV2Factory.getPair(tokenAddress, WETH);
+        if (pair != address(0) && tokenPair[tokenAddress] == address(0)) {
+            tokenPair[tokenAddress] = pair;
+        }
+        
+        // Refund any excess tokens or ETH
+        if (amountToken < finalTokenAmount) {
+            token.transfer(owner(), finalTokenAmount - amountToken);
+        }
+        if (amountETH < finalETHAmount) {
+            payable(owner()).transfer(finalETHAmount - amountETH);
+        }
+        
+        emit LiquidityAdded(tokenAddress, pair, amountETH, amountToken, liquidity);
+    }
+    
+    /**
+     * @dev Buy Meme tokens from Uniswap if price is better than mint price
+     * @param tokenAddress The token contract address
+     * @param minTokenAmount Minimum tokens to receive (slippage protection)
+     */
+    function buyMeme(address tokenAddress, uint256 minTokenAmount) external payable whenNotPaused nonReentrant {
+        require(isTokenCreated[tokenAddress], "Token not created by this factory");
+        require(msg.value > 0, "Must send ETH");
+        
+        IMemeToken token = IMemeToken(tokenAddress);
+        address pair = uniswapV2Factory.getPair(tokenAddress, WETH);
+        require(pair != address(0), "Liquidity pool does not exist");
+        
+        // Get Uniswap price
+        address[] memory path = new address[](2);
+        path[0] = WETH;
+        path[1] = tokenAddress;
+        
+        uint256[] memory amountsOut = uniswapV2Router.getAmountsOut(msg.value, path);
+        uint256 uniswapTokenAmount = amountsOut[1];
+        
+        // Calculate mint price equivalent
+        uint256 mintPrice = token.price();
+        uint256 mintTokenAmount = (msg.value * 10**18) / mintPrice;
+        
+        // Only proceed if Uniswap price is better (more tokens for same ETH)
+        require(uniswapTokenAmount >= mintTokenAmount, "Uniswap price not better than mint price");
+        require(uniswapTokenAmount >= minTokenAmount, "Slippage too high");
+        
+        // Swap ETH for tokens
+        uint256[] memory amounts = uniswapV2Router.swapExactETHForTokens{value: msg.value}(
+            minTokenAmount,
+            path,
+            msg.sender,
+            block.timestamp + 300 // 5 minutes deadline
+        );
+        
+        emit MemeBought(tokenAddress, msg.sender, msg.value, amounts[1]);
     }
 
     /**

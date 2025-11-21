@@ -4,14 +4,23 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {IMemeToken} from "../src/IMemeToken.sol";
 import {MemeFactory} from "../src/MemeFactory.sol";
+import "./UniswapV2Test.sol";
 
 contract InterfaceIntegrationTest is Test {
     MemeFactory public factory;
+    MockUniswapV2Router public router;
+    MockUniswapV2Factory public uniswapFactory;
+    MockWETH public weth;
     address public owner = address(0x1);
 
     function setUp() public {
+        // Deploy mock Uniswap contracts
+        weth = new MockWETH();
+        uniswapFactory = new MockUniswapV2Factory();
+        router = new MockUniswapV2Router(address(uniswapFactory), address(weth));
+        
         vm.startPrank(owner);
-        factory = new MemeFactory(owner);
+        factory = new MemeFactory(owner, address(router));
         vm.stopPrank();
     }
 

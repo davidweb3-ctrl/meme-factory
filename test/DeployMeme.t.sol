@@ -5,17 +5,26 @@ import {Test} from "forge-std/Test.sol";
 import {MemeFactory} from "../src/MemeFactory.sol";
 import {MemeToken} from "../src/MemeToken.sol";
 import {IMemeToken} from "../src/IMemeToken.sol";
+import "./UniswapV2Test.sol";
 
 contract DeployMemeTest is Test {
     MemeFactory public factory;
     MemeToken public implementation;
+    MockUniswapV2Router public router;
+    MockUniswapV2Factory public uniswapFactory;
+    MockWETH public weth;
     address public owner = address(0x1);
     address public user1 = address(0x2);
     address public user2 = address(0x3);
 
     function setUp() public {
+        // Deploy mock Uniswap contracts
+        weth = new MockWETH();
+        uniswapFactory = new MockUniswapV2Factory();
+        router = new MockUniswapV2Router(address(uniswapFactory), address(weth));
+        
         vm.startPrank(owner);
-        factory = new MemeFactory(owner);
+        factory = new MemeFactory(owner, address(router));
         implementation = MemeToken(factory.implementation());
         vm.stopPrank();
     }
